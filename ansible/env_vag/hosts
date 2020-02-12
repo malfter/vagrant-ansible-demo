@@ -1,0 +1,8 @@
+all:
+  hosts:
+    demo-server:
+      ansible_host: 172.16.42.1
+  vars:
+    deploy_env: vag
+    ansible_python_interpreter: /usr/bin/python3
+    ansible_user: vagrant

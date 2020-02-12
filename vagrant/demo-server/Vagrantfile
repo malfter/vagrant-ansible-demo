@@ -1,0 +1,82 @@
+require 'yaml'
+require 'getoptlong'
+
+opts = GetoptLong.new(
+  [ '--ansible-tags',      GetoptLong::OPTIONAL_ARGUMENT ], # comma separated string, e.g. "--ansible-tags='base,java'"
+  [ '--ansible-skip-tags', GetoptLong::OPTIONAL_ARGUMENT ]  # comma separated string, e.g. "--ansible-skip-tags='java'"
+)
+
+$ansibleTags=''
+$ansibleSkipTags=''
+
+opts.ordering=(GetoptLong::REQUIRE_ORDER)
+
+opts.each do |opt, arg|
+  case opt
+    when '--ansible-tags'
+      $ansibleTags=arg
+    when '--ansible-skip-tags'
+      $ansibleSkipTags=arg
+  end
+end
+
+machines = [
+  { :name => :'demo-server',:ip => '172.16.42.10',:ssh_port => 2210,:cpu => 2, :ram => 2048, :tags => ['all'] },
+]
+
+VAGRANTFILE_API_VERSION = "2"
+
+if Vagrant::Util::Platform.windows? then
+  HOME_DIR = ENV["USERPROFILE"]
+else
+  HOME_DIR = "$HOME"
+end
+
+Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  machines.each do |opts|
+    config.vm.define opts[:name] do |config|
+      config.ssh.forward_agent     = true
+      config.vm.box                = 'debian/contrib-buster64'
+      config.vm.hostname           = "%s.vagrant" % opts[:name].to_s
+      config.vm.network              "forwarded_port", guest: 22, host: opts[:ssh_port], id: "ssh"
+      config.vm.network              "private_network", ip: opts[:ip]
+      config.vm.synced_folder        ".", "/vagrant", type: "rsync"
+      config.vm.synced_folder        "./../../", "/vagrant_ansible", type: "rsync", owner: "vagrant", group: "vagrant", mount_options: ['dmode=750', 'fmode=640'],
+        rsync__exclude: [".git/", ".git*", "vagrant/", "*.md", ".DS_Store", ".ansible-lint", ".vscode"]
+      config.vm.provider "virtualbox" do |vb|
+        vb.customize ["modifyvm", :id, "--cpus", opts[:cpu] ] if opts[:cpu]
+        vb.customize ["modifyvm", :id, "--memory", opts[:ram] ] if opts[:ram]
+        vb.customize ["modifyvm", :id, "--ioapic", "on"]
+        vb.customize ["modifyvm", :id, "--vram", "32"]
+      end
+      config.vm.provision           "shell", inline: "sudo ifdown -a -X eth0 && sudo ifup -a -X eth0", run: "always"
+      config.vm.provision           "shell", inline: "sudo DEBIAN_FRONTEND=noninteractive apt-get install -yqq python3-netaddr python3-jmespath python3-distutils-extra", run: "once"
+      config.vm.provision           "ansible_local" do |ansible|
+        ansible.compatibility_mode = "2.0"
+        ansible.config_file        = "/vagrant_ansible/ansible.cfg"
+        ansible.galaxy_roles_path  = "/vagrant_ansible/ansible/roles"
+        ansible.install_mode       = "pip"
+        ansible.inventory_path     = "/vagrant_ansible/ansible/env_vag"
+        ansible.pip_install_cmd    = "curl -s https://bootstrap.pypa.io/get-pip.py | sudo python3"
+        ansible.playbook           = "/vagrant_ansible/ansible/demo_playbook.yml"
+        ansible.provisioning_path  = "/vagrant_ansible/ansible"
+        ansible.raw_arguments      = ["--vault-password-file=/vagrant_ansible/.ansible_vault_pass_file", "--connection=local"]
+        unless $ansibleTags.to_s.strip.empty?
+          # use vagrant tags from vagrant argument --ansible-tags
+          ansible.tags             = "#{$ansibleTags}".split(/\s*,\s*/)
+        else
+          # use default tags from vagrant machine options
+          ansible.tags             = opts[:tags] if opts[:tags]
+        end
+        unless $ansibleSkipTags.to_s.strip.empty?
+          # use vagrant skip_tags from vagrant argument --ansible-skip-tags
+          ansible.skip_tags        = "#{$ansibleSkipTags}".split(/\s*,\s*/)
+        end
+        ansible.verbose            = false
+        ansible.version            = "2.9.1"
+        ansible.install_mode       = :pip
+      end
+    end
+    config.vm.post_up_message      = "Machine #{opts[:name].to_s} has been provisioned with IP-address #{opts[:ip]}"
+  end
+end

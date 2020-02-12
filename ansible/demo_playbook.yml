@@ -1,0 +1,47 @@
+
+---
+  # Playbook to demonstrate how to work with different ansible tags.
+  - hosts: all
+    become: true
+
+    pre_tasks:
+      - name: pre_tasks | Show ansible_run_tags
+        debug:
+          msg: "{{ ansible_run_tags }}"
+
+      - name: pre_tasks | Show ansible_skip_tags
+        debug:
+          msg: "{{ ansible_skip_tags }}"
+
+    tasks:
+      - name: "Task with tags: lhotse"
+        debug:
+          msg: Tag 'lhotse' is in {{ ansible_run_tags }} and not in {{ ansible_skip_tags }}
+        tags:
+          - lhotse
+
+      - name: "Task with tags: makalu"
+        debug:
+          msg: Tag 'makalu' is in {{ ansible_run_tags }} and not in {{ ansible_skip_tags }}
+        tags:
+          - makalu
+
+      - name: "Task with tags: lhotse, makalu"
+        debug:
+          msg: Tag 'lhotse' or 'makalu' is in {{ ansible_run_tags }} and not in {{ ansible_skip_tags }}
+        tags:
+          - lhotse
+          - makalu
+
+      - name: "Task with tags: k2, never"
+        debug:
+          msg: Tag 'k2' is set explicitly and not in {{ ansible_skip_tags }}
+        tags:
+          - k2
+          - never
+
+      - name: "Task with tags: dhaulagiri"
+        debug:
+          msg: Tag 'dhaulagiri' is in {{ ansible_run_tags }} and not in {{ ansible_skip_tags }}
+        tags:
+          - dhaulagiri

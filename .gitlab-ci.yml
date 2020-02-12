@@ -1,0 +1,17 @@
+image: python:3
+
+stages:
+  - lint
+
+before_script:
+  - pip3 install ansible ansible-lint
+  - export ANSIBLE_CONFIG="/builds/malfter/vagrant-ansible-demo/ansible.cfg"
+  # ensure all refs available
+  - git fetch -p
+
+ansible_lint:
+  stage: lint
+  script:
+    - cat verify_lint.sh | /bin/bash
+    - cat verify_pb.sh | /bin/bash
+    - cat verify_j2.sh | /bin/bash
