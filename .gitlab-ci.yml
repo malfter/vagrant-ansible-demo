@@ -1,17 +1,20 @@
-image: python:3
-
 stages:
   - lint
 
-before_script:
-  - pip3 install ansible ansible-lint
-  - export ANSIBLE_CONFIG="/builds/malfter/vagrant-ansible-demo/ansible.cfg"
-  # ensure all refs available
-  - git fetch -p
-
 ansible_lint:
   stage: lint
+  image: python:3
+  before_script:
+    - pip3 install ansible ansible-lint
+    - export ANSIBLE_CONFIG="/builds/malfter/vagrant-ansible-demo/ansible.cfg"
+    # ensure all refs available
+    - git fetch -p
   script:
-    - cat verify_lint.sh | /bin/bash
-    - cat verify_pb.sh | /bin/bash
-    - cat verify_j2.sh | /bin/bash
+    - ./verify_lint.sh
+    - ./verify_pb.sh
+    - ./verify_j2.sh
+
+shellcheck:
+  stage: lint
+  image: pipelinecomponents/shellcheck:latest
+  script: ./verify_scripts.sh
